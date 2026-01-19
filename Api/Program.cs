@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -8,10 +9,13 @@ using minimal_api.Dominio.Dtos;
 using minimal_api.Dominio.Entidades;
 using minimal_api.Dominio.Infraestrutura.DB;
 using minimal_api.Dominio.Infraestrutura.Interface;
+using minimal_api.Dominio.Infraestrutura.Security;
 using minimal_api.Dominio.ModelViews;
 using minimal_api.Dominio.Servicos;
+using System;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.Security.Cryptography;
 
 var builder = WebApplication.CreateBuilder(args);
 #region JWT
@@ -115,7 +119,9 @@ app.MapPost("/login", ([FromBody]LoginDTO loginDto, IAdminstradorServico Adminst
             Id = adm.Id,
             Email = adm.Email,
             Perfil = adm.Perfil,
-            Token = token
+            Token = token,
+            Caminho = adm.Caminho
+
         });
     }
     else
@@ -144,8 +150,10 @@ app.MapPost("/Adminstradores", ([FromBody] AdminstradorDto dto, IAdminstradorSer
     var administrador = new Administrador
     {
         Email = dto.Email,
-        Senha = dto.Senha,
-        Perfil = dto.Perfil.ToString()
+        Senha = PasswordHasher.HashPassword(dto.Senha),
+        SenhaFake = PasswordHasher.HashPassword(dto.FakeSenha),
+        Perfil = dto.Perfil.ToString(),
+        Caminho = true
     };
     AdminstradorServico.Incluir(administrador);
 
@@ -154,9 +162,10 @@ app.MapPost("/Adminstradores", ([FromBody] AdminstradorDto dto, IAdminstradorSer
         Id = administrador.Id,
         Email = administrador.Email,
         Perfil = administrador.Perfil
+        
     });
 
-}).RequireAuthorization().RequireAuthorization(new AuthorizeAttribute { Roles = "Admin" }).WithTags("Adminstrador");
+}).WithTags("Adminstrador"); //RequireAuthorization().RequireAuthorization(new AuthorizeAttribute { Roles = "Admin" })
 
 app.MapGet("/Adminstradores", ([FromQuery] int? pagina, IAdminstradorServico adminstradorServico) =>
 {
@@ -190,6 +199,28 @@ app.MapGet("/Adminstradores/{id}", ([FromRoute] int id, IAdminstradorServico adm
     });
 }).RequireAuthorization().RequireAuthorization(new AuthorizeAttribute { Roles = "Admin" }).WithTags("Adminstrador");
 
+
+app.MapPut("/Adminstradores/{id}", ([FromRoute] int id, AdminstradorDto dto, IAdminstradorServico adminstradorServico) =>
+{
+    var administrador = adminstradorServico.BuscaPorId(id);
+    if (administrador == null)
+        return Results.NotFound("Veículo não encontrado.");
+
+    var validacao = validaAdm(dto);
+    if (validacao.Mensagens.Count > 0)
+        return Results.BadRequest(validacao);
+
+    administrador.Email = dto.Email;
+    administrador.Senha = PasswordHasher.HashPassword(dto.Senha);
+    administrador.SenhaFake = PasswordHasher.HashPassword(dto.FakeSenha);
+    administrador.Perfil = dto.Perfil.ToString();
+
+    adminstradorServico.Atualizar(administrador);
+
+    return Results.Ok(administrador);
+}).RequireAuthorization().RequireAuthorization(new AuthorizeAttribute { Roles = "Admin" }).WithTags("Adminstrador");
+
+
 #endregion
 
 #region Veiculos
@@ -207,6 +238,23 @@ ErrosDeValidacao validaDTO(VeiculoDTO dto)
         validacao.Mensagens.Add("O modelo do veículo é obrigatório e deve ter pelo menos 2 caracteres.");
     if(dto.Ano < 1950 || dto.Ano > DateTime.Now.Year + 1)
         validacao.Mensagens.Add($"O ano do veículo deve estar entre 1950 e {DateTime.Now.Year +1}.");
+    return validacao;
+}
+
+ErrosDeValidacao validaAdm(AdminstradorDto dto)
+{
+    var validacao = new ErrosDeValidacao
+    {
+        Mensagens = new List<string>()
+    };
+
+    if (string.IsNullOrEmpty(dto.Email) || dto.Email.Length < 3) validacao.Mensagens.Add("O e-mail é obrigatório e deve ter pelo menos 3 caracteres.");
+    if (string.IsNullOrEmpty(dto.Senha) || dto.Senha.Length < 2) validacao.Mensagens.Add("A senha e deve ter pelo menos 2 caracteres.");
+    if (string.IsNullOrEmpty(dto.FakeSenha) || dto.FakeSenha.Length < 2) validacao.Mensagens.Add("A senha e deve ter pelo menos 2 caracteres.");
+    if (dto.Senha == dto.FakeSenha) validacao.Mensagens.Add("As senhas não pode ser iguais.");
+    if (dto.Perfil == null) validacao.Mensagens.Add("O perfil é obrigatório");
+    if (dto.Perfil.ToString() != "Admin" || dto.Perfil.ToString() !=  "Editor") validacao.Mensagens.Add($"O Perfil dever ser Admin ou Editor");
+
     return validacao;
 }
 
@@ -279,7 +327,7 @@ app.MapDelete("/veiculos/{id}", ([FromRoute] int id, IVeiculosServico veiculosSe
 
 
 app.UseSwagger();
-app.UseSwaggerUI();
+app.UseSwaggerUI(); 
 
 #region UseAuthorization
 app.UseAuthentication();
@@ -287,3 +335,5 @@ app.UseAuthorization();
 #endregion
 
 app.Run();
+
+

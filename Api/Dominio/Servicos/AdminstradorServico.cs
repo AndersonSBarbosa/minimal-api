@@ -2,6 +2,7 @@
 using minimal_api.Dominio.Entidades;
 using minimal_api.Dominio.Infraestrutura.DB;
 using minimal_api.Dominio.Infraestrutura.Interface;
+using minimal_api.Dominio.Infraestrutura.Security;
 
 namespace minimal_api.Dominio.Servicos
 {
@@ -13,6 +14,11 @@ namespace minimal_api.Dominio.Servicos
             _contexto = contexto;
         }
 
+        public void Atualizar(Administrador adminstradorDto)
+        {
+            _contexto.Administradores.Update(adminstradorDto);
+            _contexto.SaveChanges();
+        }
 
         public Administrador? BuscaPorId(int id)
         {
@@ -28,7 +34,28 @@ namespace minimal_api.Dominio.Servicos
 
         public Administrador? Login(LoginDTO loginDto)
         {
-           return _contexto.Administradores.Where(x => x.Email == loginDto.Email && x.Senha == loginDto.Senha).FirstOrDefault() ;            
+            if (loginDto is null) return null;
+
+            // Find by email first, then verify the stored hashed password.
+            var admin = _contexto.Administradores.FirstOrDefault(x => x.Email == loginDto.Email);
+            if (admin == null) return null;
+
+
+            // Passwords must not be decrypted. Verify the provided password against the stored hash. /// FakeSenha
+            if (PasswordHasher.VerifyPassword(admin.SenhaFake, loginDto.Senha))
+            {
+                admin.Caminho = false;
+                return admin;
+            }
+            else if (PasswordHasher.VerifyPassword(admin.Senha, loginDto.Senha))
+            {
+                admin.Caminho = true;
+                return admin;
+            }
+            else
+            {
+                return null;
+            }
         }
 
         public List<Administrador> Todos(int? pagina)
