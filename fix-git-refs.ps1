@@ -41,24 +41,27 @@ function Test-GitRepository {
 function Backup-State {
     Write-Info "Creating backup of current state..."
     
+    # Create a unique temporary file
+    $script:StashMarker = [System.IO.Path]::GetTempFileName()
+    
     # Check if there are any uncommitted changes
     git diff-index --quiet HEAD -- 2>&1 | Out-Null
     if ($LASTEXITCODE -ne 0) {
         Write-Warning-Custom "Uncommitted changes detected. Stashing them for safety..."
         $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
         git stash save "fix-git-refs-backup-$timestamp" 2>&1 | Out-Null
-        Set-Content -Path "$env:TEMP\git-refs-stash-created" -Value "1"
+        Set-Content -Path $script:StashMarker -Value "1"
     }
     else {
         Write-Info "No uncommitted changes to backup."
-        Set-Content -Path "$env:TEMP\git-refs-stash-created" -Value "0"
+        Set-Content -Path $script:StashMarker -Value "0"
     }
 }
 
 # Function to restore state if needed
 function Restore-State {
-    if (Test-Path "$env:TEMP\git-refs-stash-created") {
-        $stashCreated = Get-Content "$env:TEMP\git-refs-stash-created"
+    if ($script:StashMarker -and (Test-Path $script:StashMarker)) {
+        $stashCreated = Get-Content $script:StashMarker
         if ($stashCreated -eq "1") {
             Write-Info "Restoring stashed changes..."
             git stash pop 2>&1 | Out-Null
@@ -66,7 +69,7 @@ function Restore-State {
                 Write-Warning-Custom "Could not restore stashed changes. Use 'git stash list' to see them."
             }
         }
-        Remove-Item "$env:TEMP\git-refs-stash-created" -Force
+        Remove-Item $script:StashMarker -Force -ErrorAction SilentlyContinue
     }
 }
 
@@ -130,9 +133,14 @@ function Repair-GitRefs {
     Write-Info "Method 2: Identifying and fixing specific problematic refs..."
     $fetchErrors = git fetch origin 2>&1
     
-    # Extract problematic ref names
+    # Extract problematic ref names more robustly
+    # Match patterns like: cannot lock ref 'refs/remotes/origin/...' or "refs/remotes/origin/..."
     $problematicRefs = $fetchErrors | Select-String "cannot lock ref" | 
-                       ForEach-Object { $_ -replace ".*?'(refs/remotes/origin/[^']+)'.*", '$1' }
+                       ForEach-Object { 
+                           if ($_ -match "['\`"]refs/remotes/origin/([^'\`"]+)['\`"]") {
+                               "refs/remotes/origin/$($matches[1])"
+                           }
+                       } | Where-Object { $_ -ne $null }
     
     foreach ($ref in $problematicRefs) {
         if ($ref -match "^refs/remotes/origin/") {

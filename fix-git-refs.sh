@@ -37,25 +37,35 @@ check_git_repo() {
 backup_state() {
     print_info "Creating backup of current state..."
     
+    # Create a unique temporary file
+    STASH_MARKER=$(mktemp)
+    
     # Check if there are any uncommitted changes
     if ! git diff-index --quiet HEAD -- 2>/dev/null; then
         print_warning "Uncommitted changes detected. Stashing them for safety..."
         git stash save "fix-git-refs-backup-$(date +%Y%m%d-%H%M%S)" || true
-        echo "1" > /tmp/git-refs-stash-created
+        echo "1" > "$STASH_MARKER"
     else
         print_info "No uncommitted changes to backup."
-        echo "0" > /tmp/git-refs-stash-created
+        echo "0" > "$STASH_MARKER"
     fi
+    
+    # Store marker path for cleanup
+    echo "$STASH_MARKER" > "${HOME}/.git-refs-marker"
 }
 
 # Function to restore state if needed
 restore_state() {
-    if [ -f /tmp/git-refs-stash-created ]; then
-        if [ "$(cat /tmp/git-refs-stash-created)" = "1" ]; then
-            print_info "Restoring stashed changes..."
-            git stash pop || print_warning "Could not restore stashed changes. Use 'git stash list' to see them."
+    if [ -f "${HOME}/.git-refs-marker" ]; then
+        STASH_MARKER=$(cat "${HOME}/.git-refs-marker")
+        if [ -f "$STASH_MARKER" ]; then
+            if [ "$(cat "$STASH_MARKER")" = "1" ]; then
+                print_info "Restoring stashed changes..."
+                git stash pop || print_warning "Could not restore stashed changes. Use 'git stash list' to see them."
+            fi
+            rm -f "$STASH_MARKER"
         fi
-        rm -f /tmp/git-refs-stash-created
+        rm -f "${HOME}/.git-refs-marker"
     fi
 }
 
@@ -116,9 +126,11 @@ cleanup_refs() {
     print_info "Method 2: Identifying and fixing specific problematic refs..."
     local fetch_errors=$(git fetch origin 2>&1 || true)
     
-    # Extract problematic ref names
-    echo "$fetch_errors" | grep "cannot lock ref" | grep -oP "refs/remotes/origin/[^':]+" | while read -r ref; do
-        fix_specific_ref "$ref"
+    # Extract problematic ref names using sed for POSIX compatibility
+    echo "$fetch_errors" | grep "cannot lock ref" | sed -n "s/.*'\(refs\/remotes\/origin\/[^']*\)'.*/\1/p" | while read -r ref; do
+        if [ -n "$ref" ]; then
+            fix_specific_ref "$ref"
+        fi
     done
     
     # Try fetching again
