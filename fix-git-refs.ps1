@@ -52,10 +52,8 @@ function Remove-CorruptedRefs {
             $branchName = $_.Name
             $refPath = "refs/remotes/origin/$branchName"
             
-            try {
-                git show-ref --verify $refPath 2>$null | Out-Null
-            }
-            catch {
+            git show-ref --verify $refPath 2>$null | Out-Null
+            if ($LASTEXITCODE -ne 0) {
                 Write-ColorOutput "Found potentially corrupted ref: $($_.FullName)" "Yellow"
                 Remove-Item $_.FullName -Force
                 Write-ColorOutput "Removed: $($_.FullName)" "Green"
@@ -75,11 +73,11 @@ function Invoke-PruneRemoteRefs {
 function Invoke-FetchAndUpdate {
     Write-ColorOutput "Fetching from remote repository..." "Yellow"
     
-    try {
-        git fetch --prune origin 2>&1 | Out-Null
+    git fetch --prune origin 2>&1 | Out-Null
+    if ($LASTEXITCODE -eq 0) {
         Write-ColorOutput "Fetch completed successfully" "Green"
     }
-    catch {
+    else {
         Write-ColorOutput "Fetch failed, trying alternative method..." "Red"
         
         # Remove all remote refs and fetch fresh
@@ -105,13 +103,13 @@ function Update-CurrentBranch {
     if ($currentBranch) {
         Write-Host "Current branch: $currentBranch"
         
-        try {
-            git show-ref --verify "refs/remotes/origin/$currentBranch" 2>$null | Out-Null
+        git show-ref --verify "refs/remotes/origin/$currentBranch" 2>$null | Out-Null
+        if ($LASTEXITCODE -eq 0) {
             Write-ColorOutput "Pulling latest changes..." "Yellow"
             git pull origin $currentBranch
             Write-ColorOutput "Branch updated successfully" "Green"
         }
-        catch {
+        else {
             Write-ColorOutput "No remote tracking branch found for $currentBranch" "Yellow"
         }
     }

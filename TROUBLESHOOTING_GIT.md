@@ -23,10 +23,16 @@ This error occurs when Git cannot update a remote reference because the local re
 
 #### Solution 1: Automated Fix Script (Recommended)
 
-Use the provided `fix-git-refs.sh` script to automatically resolve the issue:
+Use the provided fix script to automatically resolve the issue:
 
+**For Linux/Mac (Bash):**
 ```bash
 ./fix-git-refs.sh
+```
+
+**For Windows (PowerShell):**
+```powershell
+.\fix-git-refs.ps1
 ```
 
 The script will:
