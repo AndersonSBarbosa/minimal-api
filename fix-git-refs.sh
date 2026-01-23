@@ -64,7 +64,7 @@ remove_corrupted_refs() {
     
     # Get list of all remote branches
     if [ -d .git/refs/remotes/origin ]; then
-        find .git/refs/remotes/origin -type f | while read ref_file; do
+        find .git/refs/remotes/origin -type f | while read -r ref_file; do
             if ! git show-ref --verify "refs/remotes/origin/$(basename "$ref_file")" > /dev/null 2>&1; then
                 echo -e "${YELLOW}Found potentially corrupted ref: $ref_file${NC}"
                 rm -f "$ref_file"
