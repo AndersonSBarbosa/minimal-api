@@ -218,7 +218,7 @@ app.MapPut("/Adminstradores/{id}", ([FromRoute] int id, AdminstradorDto dto, IAd
     adminstradorServico.Atualizar(administrador);
 
     return Results.Ok(administrador);
-}).RequireAuthorization().RequireAuthorization(new AuthorizeAttribute { Roles = "Admin" }).WithTags("Adminstrador");
+});//.RequireAuthorization().RequireAuthorization(new AuthorizeAttribute { Roles = "Admin" }).WithTags("Adminstrador");
 
 
 #endregion
@@ -252,8 +252,8 @@ ErrosDeValidacao validaAdm(AdminstradorDto dto)
     if (string.IsNullOrEmpty(dto.Senha) || dto.Senha.Length < 2) validacao.Mensagens.Add("A senha e deve ter pelo menos 2 caracteres.");
     if (string.IsNullOrEmpty(dto.FakeSenha) || dto.FakeSenha.Length < 2) validacao.Mensagens.Add("A senha e deve ter pelo menos 2 caracteres.");
     if (dto.Senha == dto.FakeSenha) validacao.Mensagens.Add("As senhas não pode ser iguais.");
-    if (dto.Perfil == null) validacao.Mensagens.Add("O perfil é obrigatório");
-    if (dto.Perfil.ToString() != "Admin" || dto.Perfil.ToString() !=  "Editor") validacao.Mensagens.Add($"O Perfil dever ser Admin ou Editor");
+    //if (dto.Perfil == null) validacao.Mensagens.Add("O perfil é obrigatório");
+    //if (dto.Perfil.ToString() != "Admin" || dto.Perfil.ToString() !=  "Editor") validacao.Mensagens.Add($"O Perfil dever ser Admin ou Editor");
 
     return validacao;
 }
